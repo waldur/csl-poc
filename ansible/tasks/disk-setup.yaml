@@ -1,0 +1,31 @@
+# Storage disk setup
+- name: Create a mount directory for data storage
+  file:
+    path: "{{ storage_directory }}"
+    state: directory
+    mode: '0755'
+  tags:
+    - disk-setup
+
+- name: Create file system for data storage dir
+  filesystem:
+    fstype: ext4
+    dev: "{{ storage_device_path }}"
+  tags:
+    - disk-setup
+
+- name: Get UUID for storage disk
+  command: blkid -s UUID -o value "{{ storage_device_path }}"
+  register: storage_disk_blkid
+  tags:
+    - disk-setup
+
+- name: Mount up device by UUID
+  mount:
+    path: "{{ storage_directory }}"
+    src: 'UUID={{ storage_disk_blkid.stdout | quote }}'
+    fstype: ext4
+    opts: noatime
+    state: mounted
+  tags:
+    - disk-setup

@@ -1,0 +1,9 @@
+- name: Install required packages
+  package:
+    name:
+      - git
+      - tar
+    state: present
+  environment: "{{ proxy_env | default({}) }}"
+  tags:
+    - prerequisite

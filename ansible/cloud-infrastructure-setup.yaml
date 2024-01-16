@@ -1,0 +1,22 @@
+- name: Setup RKE2 nodes with Helm and ArgoCD
+  hosts: "{{ host_group | default('rke2_nodes') }}"
+  become: true
+  vars_files:
+    - vars.defaults
+    - vars.custom
+  tasks:
+    - name: Setup disk for storage
+      import_tasks: tasks/disk-setup.yaml
+      when: setup_storage | default(true)
+
+    - name: Setup RKE2
+      import_tasks: tasks/rke2-setup.yaml
+      when: setup_rke2 | default(true)
+
+    - name: Setup Helm
+      import_tasks: tasks/helm-installation.yaml
+      when: setup_helm | default(true)
+
+    - name: Setup ArgoCD
+      import_tasks: tasks/argocd-installation.yaml
+      when: setup_argocd | default(true)
