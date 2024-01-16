@@ -55,7 +55,7 @@ argocd app create --repo https://github.com/waldur/csl-poc.git --path applicatio
 argocd app sync argocd/longhorn
 ```
 
-## PostgreSQL operator
+### PostgreSQL operator
 
 ```bash
 kubectl create namespace postgres-operator-system
