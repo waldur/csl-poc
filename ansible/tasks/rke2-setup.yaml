@@ -1,0 +1,362 @@
+# RKE2 prerequisites
+- name: Selecting initial server from inventory
+  set_fact:
+    initial_node: "{{ hostvars.values() | selectattr('initial_server', 'defined') }}"
+  tags:
+    - rke2_setup
+
+- debug:
+    msg: "{{ initial_node[0].ansible_host }} {{ initial_node[0].inventory_hostname }}"
+  tags:
+    - rke2_setup
+
+- name: Disable SELinux
+  ansible.posix.selinux:
+    state: disabled
+  when: ansible_os_family == 'RedHat' or ansible_os_family == 'Rocky'
+  tags:
+    - rke2_setup
+
+- name: Add first server IP to hosts
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    line: "{{ initial_node[0].ansible_host }} {{ initial_node[0].inventory_hostname }}"
+  when:
+    - setup_hosts_file | default(true) | bool
+    - not (initial_server | default(false) | bool)
+  tags:
+    - rke2_setup
+
+- name: Download RKE2 installer
+  local_action:
+    module: get_url
+    url: https://get.rke2.io
+    dest: "{{ playbook_dir }}/rke2/rke2-install.sh"
+    force: false
+    mode: '0755'
+    backup: true
+  environment: "{{ proxy_env | default({}) }}"
+  become: no
+  run_once: true
+  tags:
+    - rke2_setup
+
+- name: Gather service facts
+  service_facts:
+  tags:
+    - rke2_setup
+
+- name: Setup network manager
+  blockinfile:
+    path: /etc/NetworkManager/conf.d/rke2-canal.conf
+    create: yes
+    state: present
+    block: |
+      [keyfile]
+      unmanaged-devices=interface-name:cali*;interface-name:flannel*
+  when:
+    - ansible_facts.services['NetworkManager.service'] is defined
+    - ansible_facts.services['NetworkManager.service']['status'] != 'not-found'
+  tags:
+    - rke2_setup
+
+- name: Reload Network manager
+  systemd:
+    service: NetworkManager
+    state: reloaded
+  when:
+    - ansible_facts.services['NetworkManager.service'] is defined
+    - ansible_facts.services['NetworkManager.service']['status'] != 'not-found'
+  tags:
+    - rke2_setup
+
+- name: Stop Firewall
+  systemd:
+    service: firewalld
+    enabled: false
+    state: stopped
+  when:
+    - ansible_facts.services['firewalld.service'] is defined
+    - ansible_facts.services['firewalld.service']['status'] != 'not-found'
+  tags:
+    - rke2_setup
+
+# RKE2 server setup
+- name: Create directory for custom Rancher root
+  file:
+    state: directory
+    path: "{{ rke2_custom_root }}"
+  when:
+    - rke2_custom_root is defined
+  tags:
+    - rke2_setup
+
+- name: Create symbolic link for Rancher root
+  file:
+    state: link
+    src: "{{ rke2_custom_root }}"
+    dest: /var/lib/rancher
+    force: true
+  when:
+    - rke2_custom_root is defined
+  tags:
+    - rke2_setup
+
+- name: Download RKE2 canal archive
+  delegate_to: localhost
+  run_once: yes
+  get_url:
+    url: https://github.com/rancher/rke2/releases/download/{{ rke2_version }}/rke2-images-canal.linux-amd64.tar.gz
+    dest: rke2/rke2-images-canal.linux-amd64.tar.gz
+  environment: "{{ proxy_env | default({}) }}"
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+    - "'rke2/rke2-images-canal.linux-amd64.tar.gz' is not file"
+    - (rke2_cni | default('canal')) == 'canal'
+  tags:
+    - rke2_setup
+
+- name: Download RKE2 calico archive
+  delegate_to: localhost
+  run_once: yes
+  get_url:
+    url: https://github.com/rancher/rke2/releases/download/{{ rke2_version }}/rke2-images-calico.linux-amd64.tar.gz
+    dest: rke2/rke2-images-calico.linux-amd64.tar.gz
+  environment: "{{ proxy_env | default({}) }}"
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+    - "'rke2/rke2-images-calico.linux-amd64.tar.gz' is not file"
+    - (rke2_cni | default('canal')) == 'calico'
+  tags:
+    - rke2_setup
+
+- name: Download RKE2 core archive
+  delegate_to: localhost
+  run_once: yes
+  get_url:
+    url: https://github.com/rancher/rke2/releases/download/{{ rke2_version }}/rke2-images-core.linux-amd64.tar.gz
+    dest: rke2/rke2-images-core.linux-amd64.tar.gz
+  environment: "{{ proxy_env | default({}) }}"
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+    - "'rke2/rke2-images-core.linux-amd64.tar.gz' is not file"
+  tags:
+    - rke2_setup
+
+- name: Create directory for RKE2 images
+  file:
+    state: directory
+    path: /var/lib/rancher/rke2/agent/images/
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+  tags:
+    - rke2_setup
+
+- name: Copy RKE2 canal archive to targets
+  copy:
+    src: rke2/rke2-images-canal.linux-amd64.tar.gz
+    dest: /var/lib/rancher/rke2/agent/images/rke2-images-canal.linux-amd64.tar.gz
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+    - (rke2_cni | default('canal')) == 'canal'
+  tags:
+    - rke2_setup
+
+- name: Copy RKE2 calico archive to targets
+  copy:
+    src: rke2/rke2-images-calico.linux-amd64.tar.gz
+    dest: /var/lib/rancher/rke2/agent/images/rke2-images-calico.linux-amd64.tar.gz
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+    - (rke2_cni | default('canal')) == 'calico'
+  tags:
+    - rke2_setup
+
+- name: Copy RKE2 core archive to targets
+  copy:
+    src: rke2/rke2-images-core.linux-amd64.tar.gz
+    dest: /var/lib/rancher/rke2/agent/images/rke2-images-core.linux-amd64.tar.gz
+  when:
+    - rke2_air_gap_installation | default(true) | bool
+  tags:
+    - rke2_setup
+
+- name: Upload RKE2 installer
+  copy:
+    src: "{{ playbook_dir }}/rke2/rke2-install.sh"
+    dest: /tmp/rke2-install.sh
+    mode: 0770
+  tags:
+    - rke2_setup
+
+- name: Run installer
+  vars:
+    rke_env:
+      INSTALL_RKE2_VERSION: "{{ rke2_version }}"
+  command: /tmp/rke2-install.sh
+  environment:
+     "{{ proxy_env | default({}) | combine(rke_env) }}"
+  tags:
+    - rke2_setup
+
+- name: Create config file for first server
+  blockinfile:
+    path: /etc/rancher/rke2/config.yaml
+    create: yes
+    state: present
+    block: |
+      token: {{ rke2_shared_token }}
+      cni: {{ rke2_cni | default('canal') }}
+      {% if expose_k8s_api %}
+      tls-san:
+        - {{ lb_public_domain_name }}
+      {% endif %}
+  when:
+    - initial_server | default(false) | bool
+  tags:
+    - rke2_setup
+
+- name: Create config file for other servers
+  blockinfile:
+    path: /etc/rancher/rke2/config.yaml
+    create: yes
+    state: present
+    block: |
+      server: https://{{ initial_node[0].inventory_hostname }}:9345
+      token: {{ rke2_shared_token }}
+      cni: {{ rke2_cni | default('canal') }}
+      {% if expose_k8s_api %}
+      tls-san:
+        - {{ lb_public_domain_name }}
+      {% endif %}
+  when:
+    - not (initial_server | default(false) | bool)
+  tags:
+    - rke2_setup
+
+- name: Create RKE2 daemon env file with proxy settings
+  blockinfile:
+    path: /etc/default/rke2-server
+    create: yes
+    state: present
+    block: |
+      {% for key, value in proxy_env.items() %}
+      {% if key != 'no_proxy' %}
+      CONTAINERD_{{ key | upper }}={{ value }}
+      {% else %}
+      CONTAINERD_{{ key | upper }}=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local,{{ value }}
+      {% endif %}
+      {% endfor %}
+  when:
+    - proxy_env is defined
+    - rke2_add_containerd_proxy | default('no') | bool
+  tags:
+    - rke2_setup
+
+- name: Enable RKE2 server
+  systemd:
+    service: rke2-server.service
+    enabled: yes
+  tags:
+    - rke2_setup
+
+- name: Start RKE2 initial server
+  systemd:
+    service: rke2-server.service
+    state: started
+  # It is required to run initial server before others
+  when:
+    - initial_server | default(false) | bool
+  tags:
+    - rke2_setup
+
+- name: Pause before launching of additional RKE2 servers
+  pause:
+    seconds: 20
+  tags:
+    - rke2_setup
+
+- name: Start RKE2 additional servers
+  throttle: 1
+  systemd:
+    service: rke2-server.service
+    state: started
+  when:
+    - not (initial_server | default(false) | bool)
+  register: start_server
+  tags:
+    - rke2_setup
+
+- name: sleep for 60 seconds and continue with play
+  become: no
+  wait_for:
+    timeout: 60
+  delegate_to: localhost
+  when: start_server.changed
+  tags:
+    - rke2_setup
+
+- name: Link kubectl binary
+  file:
+    src: /var/lib/rancher/rke2/bin/kubectl
+    dest: /bin/kubectl
+    state: link
+  tags:
+    - rke2_setup
+
+- name: Check status of the cluster nodes
+  command: kubectl get nodes
+  register: nodes_status
+  environment:
+    KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+  run_once: true
+  tags:
+    - rke2_setup
+
+- name: View k8s nodes
+  debug:
+    msg: "{{ nodes_status.stdout }}"
+  run_once: true
+  tags:
+    - rke2_setup
+
+- name: Copy custom NGINX controller config
+  copy:
+    src: rke2/nginx-helm-chart-config.yaml
+    dest: /var/lib/rancher/rke2/server/manifests/rke2-ingress-nginx-config.yaml
+  tags:
+    - rke2_setup
+
+# Assure longhorn prerequisites on nodes are fulfilled
+- name: Create storage directory for longhorn on all nodes
+  file:
+    path: "{{ storage_directory }}"
+    state: directory
+    mode: '0755'
+
+- name: Creating a file with content
+  copy:
+    dest: "/etc/multipath.conf"
+    content: |
+      defaults {
+        user_friendly_names yes
+      }
+
+      blacklist {
+          devnode "^sd[a-z0-9]+"
+      }
+  register: multipath_conf
+  when: ansible_os_family == 'Debian'
+
+- name: restart service
+  service:
+    name: multipathd
+    state: restarted
+  when: multipath_conf.changed and ansible_os_family == 'Debian'
+
+- name: Add kubeconfig file to the node user's home dir
+  ansible.builtin.copy:
+    src: /etc/rancher/rke2/rke2.yaml
+    remote_src: yes
+    dest: ~/.kube/config

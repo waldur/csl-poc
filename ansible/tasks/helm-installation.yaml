@@ -1,0 +1,59 @@
+# Helm installation
+- import_tasks: package-prerequisites.yaml
+
+- name: Download Helm utility
+  local_action:
+    module: get_url
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: "{{ playbook_dir }}/helm/get-helm.sh"
+    force: false
+    mode: '0755'
+    backup: true
+  environment: "{{ proxy_env | default({}) }}"
+  become: no
+  run_once: true
+  tags:
+    - helm
+
+- name: Check if Helm is installed
+  command: which helm
+  changed_when: false
+  failed_when: helm_installed.rc not in [0, 1]
+  register: helm_installed
+  tags:
+    - helm
+
+- name: Copy Helm installer to nodes
+  copy:
+    src: helm/get-helm.sh
+    dest: /tmp/get-helm.sh
+    mode: 0770
+  when:
+    helm_installed.rc != 0
+  tags:
+    - helm
+
+- name: Install Helm
+  vars:
+    helm_vars:
+      HELM_INSTALL_DIR: /usr/bin
+  command: /tmp/get-helm.sh
+  environment: "{{ proxy_env | default({}) | combine(helm_vars) }}"
+  when:
+    helm_installed.rc != 0
+  ignore_errors: yes
+  tags:
+    - helm
+
+- name: Fetch Helm releases
+  command: helm ls
+  register: release_list
+  tags:
+    - helm
+
+- name: View Helm releases
+  debug:
+    msg: "{{ release_list.stdout }}"
+  run_once: true
+  tags:
+    - helm
