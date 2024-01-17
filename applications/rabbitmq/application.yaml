@@ -5,27 +5,17 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    chart: rabbitmq
+  sources:
+  - chart: rabbitmq
     repoURL: https://charts.bitnami.com/bitnami
     targetRevision: 10.3.5
     helm:
       releaseName: rabbitmq
-      valuesObject:
-        image:
-          registry: "docker.io"
-          repository: "bitnami/rabbitmq"
-          tag: 3.8.14
-        replicaCount: 3
-        persistence:
-          enabled: true
-          size: "10Gi"
-          storageClass: ""
-        auth:
-          username: "waldur"
-          password: "waldur"
-        clustering:
-          forceBoot: true
+      valueFiles:
+      - $override/applications/rabbitmq/values-custom.yaml
+  - repoURL: https://github.com/waldur/csl-poc.git
+    targetRevision: HEAD
+    ref: override
   destination:
     server: "https://kubernetes.default.svc"
     namespace: "waldur"
