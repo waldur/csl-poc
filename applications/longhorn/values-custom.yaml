@@ -1,0 +1,6 @@
+csi:
+  kubeletRootDir: /var/lib/kubelet/
+defaultSettings:
+  defaultDataPath: "/opt/rke2_storage"
+persistence:
+  defaultClassReplicaCount: 1

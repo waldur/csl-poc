@@ -5,19 +5,17 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    chart: longhorn
+  sources:
+  - chart: longhorn
     repoURL: https://charts.longhorn.io
     targetRevision: 1.4.4
     helm:
       releaseName: longhorn
-      valuesObject:
-        csi:
-          kubeletRootDir: /var/lib/kubelet/
-        defaultSettings:
-          defaultDataPath: "/opt/rke2_storage"
-        persistence:
-          defaultClassReplicaCount: 1
+      valueFiles:
+      - $override/applications/longhorn/values-custom.yaml
+  - repoURL: https://github.com/waldur/csl-poc.git
+    targetRevision: HEAD
+    ref: override
   destination:
     server: "https://kubernetes.default.svc"
     namespace: "longhorn-system"
