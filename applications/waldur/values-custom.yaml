@@ -7,6 +7,9 @@ externalDB:
 
 rabbitmq:
   enabled: true
+  replicaCount: 1
+  persistence:
+    enabled: false
 
 global:
   imageRegistry: "registry.hpc.ut.ee/mirror"
