@@ -1,0 +1,12 @@
+ingress:
+  tls:
+    enabled: false
+
+externalDB:
+  enabled: true
+
+rabbitmq:
+  enabled: true
+
+global:
+  imageRegistry: "registry.hpc.ut.ee/mirror"

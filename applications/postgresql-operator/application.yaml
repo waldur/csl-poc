@@ -7,7 +7,7 @@ spec:
   project: default
   sources:
   - chart: postgres-operator
-    repoURL: https://opensource.zalando.com/postgres-operator/charts/
+    repoURL: https://opensource.zalando.com/postgres-operator/charts/postgres-operator
     targetRevision: 1.10.1
     helm:
       releaseName: postgres-operator

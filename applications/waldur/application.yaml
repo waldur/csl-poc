@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: waldur-test
+  namespace: argocd
+spec:
+  project: default
+  sources:
+  - path: waldur
+    repoURL: https://github.com/waldur/waldur-helm.git
+    targetRevision: HEAD
+    helm:
+      releaseName: waldur
+      valueFiles:
+      - $override/applications/waldur/values-custom.yaml
+  - repoURL: https://github.com/waldur/csl-poc.git
+    targetRevision: HEAD
+    ref: override
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: "waldur"
