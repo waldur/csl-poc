@@ -4,6 +4,8 @@ ingress:
 
 externalDB:
   enabled: true
+  secretName: waldur.waldur-postgresql.credentials.postgresql.acid.zalan.do
+  serviceName: waldur-postgresql
 
 rabbitmq:
   enabled: true
